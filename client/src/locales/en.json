@@ -1,0 +1,25 @@
+{
+  "items": {
+    "All": "All",
+    "New": "New",
+    "Answered": "Answered",
+    "Not Answered": "Not Answered"
+},
+
+
+"mainNavigationItems":{
+    "Tsuutatsu": "Tsuutatsu",
+    "Ringi": "Ringi",
+    "Kanren": "Kanren"
+},
+"masterNavigationItems": {
+    "User Accounts": "User Accounts",
+    "Category": "Category"
+},
+"RingiTab":{
+  "For Approval": "For Approval",
+  "For HRD Review": "For HRD Review",
+  "For Revision": "For Revision",
+  "Revised Ringi": "Revised Ringi"
+}
+}

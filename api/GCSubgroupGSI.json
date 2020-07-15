@@ -1,0 +1,29 @@
+{
+    "AttributeDefinitions" : [
+        {
+            "AttributeName": "gc_subgroup",
+            "AttributeType": "S"
+        }
+    ],
+    "GlobalSecondaryIndexUpdates": [
+        {
+            "Create": {
+                "IndexName": "gc_subgroup-index",
+                "KeySchema": [
+                    {
+                        "AttributeName": "gc_subgroup",
+                        "KeyType": "HASH"
+                    }
+                ],
+                "Projection": {
+                    "ProjectionType": "ALL"
+                },
+                "ProvisionedThroughput": {
+                    "ReadCapacityUnits": 1,
+                    "WriteCapacityUnits": 1
+                }
+            }
+        }
+    ],
+    "TableName": "gcportal_users_tbl"
+ }

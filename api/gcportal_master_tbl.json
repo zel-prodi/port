@@ -1,0 +1,19 @@
+{
+    "TableName": "gcportal_master_tbl",
+    "KeySchema": [ 
+      {
+        "AttributeName": "category_id",
+        "KeyType": "HASH"
+      }
+    ],
+    "AttributeDefinitions": [
+      {
+        "AttributeName": "category_id",
+        "AttributeType": "S"
+      }
+    ],
+    "ProvisionedThroughput": {
+      "ReadCapacityUnits": 1,
+      "WriteCapacityUnits": 1
+    }
+}

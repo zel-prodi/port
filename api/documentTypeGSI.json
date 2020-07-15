@@ -1,0 +1,29 @@
+ {
+    "AttributeDefinitions" : [
+        {
+            "AttributeName": "document_type",
+            "AttributeType": "S"
+        }
+    ],
+    "GlobalSecondaryIndexUpdates": [
+        {
+            "Create": {
+                "IndexName": "document_type-index",
+                "KeySchema": [
+                    {
+                        "AttributeName": "document_type",
+                        "KeyType": "HASH"
+                    }
+                ],
+                "Projection": {
+                    "ProjectionType": "ALL"
+                },
+                "ProvisionedThroughput": {
+                    "ReadCapacityUnits": 1,
+                    "WriteCapacityUnits": 1
+                }
+            }
+        }
+    ],
+    "TableName": "gcportal_document_tbl"
+ }

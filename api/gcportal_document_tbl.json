@@ -1,0 +1,27 @@
+{
+    "TableName": "gcportal_document_tbl",
+    "KeySchema": [
+      {
+        "AttributeName": "document_id",
+        "KeyType": "HASH"
+      },
+      {
+        "AttributeName": "document_type",
+        "KeyType": "RANGE"
+      }
+    ],
+    "AttributeDefinitions": [
+      {
+        "AttributeName": "document_id",
+        "AttributeType": "S"
+      },
+      {
+        "AttributeName": "document_type",
+        "AttributeType": "S"
+      }
+    ],
+    "ProvisionedThroughput": {
+      "ReadCapacityUnits": 1,
+      "WriteCapacityUnits": 1
+    }
+}

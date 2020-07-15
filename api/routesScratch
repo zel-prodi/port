@@ -1,0 +1,673 @@
+const AWS = require('aws-sdk');
+const express = require('express');
+const uuid = require('uuid');
+const nodemailer = require('nodemailer');
+const multer = require('multer');
+
+const mkdirp =  require('mkdirp');
+const fsx = require('fs-extra');
+const FroalaEditor = require('wysiwyg-editor-node-sdk');
+
+//============ COGNITO ONGOING =============//
+// var authController = require('Controllers/AuthController.js');
+// router.post('/auth/register', authController.register);
+// router.post('/auth/login', authController.login);
+// router.post('/auth/validate', authController.validate_token);
+
+// const AmazonCognitoIdentity = require('amazon-cognito-identity-js');
+// const poolData = {
+//    UserPoolId: "us-east-2_NPOPJaBg3",
+//    ClientId: "7s1q4ucglg7kdllp6uta33v5tc"
+// };
+// const pool_region = "us-east-2";
+// const userPool = new AmazonCognitoIdentity.CognitoUserPool(poolData);
+
+// router.post('/auth/login',(req, res)=>{
+//     const username = req.body.username;
+//     const password = req.body.password;
+
+//     var authenticationDetails = new AmazonCognitoIdentity.AuthenticationDetails({
+//         Username: username,
+//         Password: password
+//     });
+
+//     var userData = {
+//         Username: userName,
+//         Pool: userPool
+//     }
+
+//     var cognitoUser = new AmazonCognitoIdentity.CognitoUser(userData);
+//     cognitoUser.authenticateUser(authenticationDetails, {
+//         onSuccess: function (result) {
+//            var accesstoken = result.getAccessToken().getJwtToken();
+//            callback(null, accesstoken);
+
+//         },
+//         onFailure: (function (err) {
+//            callback(err);
+//        })
+//    })
+
+
+// })
+
+// ======UPLOAD FILE ON S3=======//
+const multerS3 = require( 'multer-s3' );
+const path = require('path');
+
+
+const IS_OFFLINE = process.env.NODE_ENV !== 'production';
+// const GCPORTAL_TABLE = process.env.TABLE;
+                                            //offline        //online
+const GCPORTAL_TABLE = IS_OFFLINE === true ? "gcportal_tbl" : process.env.GCPORTAL_TABLE;
+
+const dynamoDb = IS_OFFLINE === true ?
+    new AWS.DynamoDB.DocumentClient({
+        region: 'eu-east-2',
+        endpoint: 'http://localhost:8000',
+    }) :
+    new AWS.DynamoDB.DocumentClient();
+const router = express.Router();
+
+router.get('/test', (req,res) =>{
+    res.send('hello zel - gcportal')
+})
+
+router.get('/testing', (req, res) => {
+    const params = {
+        TableName: GCPORTAL_TABLE
+    };
+    dynamoDb.scan(params, (error, result) => {
+        if (error) {
+            res.status(400).json({ error: 'Error fetching the employees' });
+        }
+        res.json(result.Items);
+    });
+});
+
+//============ FILE UPLOAD ON S3===============//
+// Multiple File Uploads ( max 4 )
+    const s3 = new AWS.S3({
+        accessKeyId: 'AKIAJOUFR3FRCY7XFPCQ',
+        secretAccessKey: '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',
+        Bucket: 'gcportal-testbucket'
+       })
+
+       /**
+     * Single Upload
+     */
+    const profileImgUpload = multer({
+        storage: multerS3({
+        s3: s3,
+        bucket: 'gcportal-testbucket',
+        acl: 'public-read',
+        key: function (req, file, cb) {
+            // var newFileName = Date.now() + "-" + file.originalname;
+            // console.log(req.body.name)
+            console.log(req.body.name)
+            var newFileName = req.body.name
+            var fullPath = 'uploads/uploaded_files/'+ newFileName;
+            // var fullPath = `https://gcportal-testbucket.s3.us-east-2.amazonaws.com/uploads/uploaded_files/`+ newFileName
+            cb(null, fullPath, newFileName)
+    
+        },
+        }),
+        
+        // limits:{ fileSize: 2000000 }, // In bytes: 2000000 bytes = 2 MB
+        // fileFilter: function( req, file, cb ){
+        // checkFileType( file, cb );
+        // },
+        // location: 'https://gcportal-testbucket.s3.us-east-2.amazonaws.com/uploads/uploaded_files/'
+    }).single('file');
+
+
+// function checkFileType( file, cb ){
+//     // Allowed ext
+//     const filetypes = /jpeg|jpg|png|gif|doc|txt|pdf|xls/;
+    
+//     // Check ext
+//     const extname = filetypes.test( path.extname( file.originalname ).toLowerCase());
+//     // Check mime
+//     const mimetype = filetypes.test( file.mimetype );
+//    if( mimetype && extname ){
+//      return cb( null, true );
+//     } else {
+//      cb( 'Error: Images Only!' );
+//     }
+//    }
+
+ 
+router.post( '/uploadSingleFile', ( req, res ) => {
+    profileImgUpload( req, res, ( error ) => {
+      console.log( 'requestOkokok', req.file );
+      // console.log( 'error', error );
+      if( error ){
+       console.log( 'errors', error );
+       res.send( error.message );
+      } else {
+       // If File not found
+       if( req.file === undefined ){
+        console.log( 'Error: No File Selected!' );
+        res.json( 'Error: No File Selected' );
+       } else {
+        // If Success
+        const imageName = req.file.key;
+        const imageLocation = req.file.location;
+    // Save the file name into database into profile model
+    res.send( {
+         image: imageName,
+         location: imageLocation
+        } );
+       }
+      }
+     });
+    });
+
+//============== U P L O A D  I M A G E  F R O A L A =================//
+router.post('/upload_image/:id', (req, res)=> {
+    
+    var param = req.params.id;
+    console.log('posssssssst')
+    console.log(param)
+    // gcportal\public\uploads\content_images
+    let uri = '../gcportal/public/uploads/content_images/'
+    fsx.pathExists(uri+param+'/', function(err){
+        if(!err){
+            FroalaEditor.Image.upload(req, uri+param+'/', function(err, data){
+                if(err){
+                    return res.send(JSON.stringify(err));
+                }
+                res.send(data)
+            })
+        }else{
+            FroalaEditor.Image.upload(req, uri+param+'/', function(err, data) {
+                if (err) {
+                  return res.send(JSON.stringify(err));
+                }
+                console.log(data)
+                res.send(data);
+         
+              });
+        }
+    })
+})
+
+
+
+
+
+//============== U P L O A D  F I L E S =================//
+// const storage = multer.diskStorage({
+//     destination:'./uploads/uploaded_files',
+//     filename: function( req, file, cb){
+//         cb(null, file.originalname)
+//     }
+// });
+// const upload = multer({storage: storage})
+
+// router.post('/uploadMultipleFiles', upload.array("files[]"), (req, res)=>{
+//     console.log(req.files)
+//   })
+
+
+//=============== E M A I L  N O T I F ===================//
+
+router.post('/sendNotif', (req, res) => {
+    
+    var transporter = nodemailer.createTransport({ //use the nodemailer to call the createTransport function that will help you to tell node what sill be the email and service you are going to use by sending email
+        // host: 'smtp.gmail.com',
+        // port: 465,
+        // secure: true,
+    service: 'gmail',
+  auth: {
+    user: 'dummyemail82492@gmail.com',
+    pass:  'bloodstorm'
+  }
+});
+
+//define object that will be the content of email
+var mailOptions = {
+  from: 'dummyemail82492@gmail.com',
+  to: req.body.recipient, //on multiple recipient, just separated it by adding comma ,())
+  subject: req.body.subject,
+//   text: req.body.body
+    html: req.body.body
+};
+
+transporter.sendMail( mailOptions, function( error, info ){
+    if(error){
+    console.log(error);
+    res.send(error)
+
+ }else{
+        console.log('Message sent: ' + info.response);
+        res.send('Message sent: ' + info.response)
+}
+});
+})
+
+
+
+//===============GLOBAL FUNCTIONS======================//
+//get data
+router.get('/getDocumentRecords/:document_type', (req, res) => {
+    const params = {
+        TableName: GCPORTAL_TABLE,
+        IndexName: 'document_type-index',
+        KeyConditionExpression: 'document_type = :hkey',
+        ExpressionAttributeValues: {
+            ':hkey': req.params.document_type
+        }
+    }
+    dynamoDb.query(params, (err, result)=> {
+        if(err){
+            console.log(err.message)
+        }else{
+            res.send(result.Items)
+        }
+    })
+})
+
+//save data
+router.post('/addNewDocumentRecord', (req, res)=> {
+    const toSend = req.body
+    toSend.id = uuid.v4()
+    const params = {
+        TableName: GCPORTAL_TABLE,
+        Item: toSend
+    }
+    dynamoDb.put(params, (err)=>{
+        if(err){
+            console.log(err.message)
+        }else{
+            res.send('Record Successfully Added')
+        }
+    })
+})
+
+//update data
+router.put('/updateDocumentRecord', (req,res) => {
+    const params = {
+        TableName: GCPORTAL_TABLE,
+        Item: req.body
+    }
+    dynamoDb.put(params, (err)=> {
+        if(err){
+            console.log(err.message)
+        }else{
+            res.send('Record Succesfully Updated')
+        }
+    })
+})
+
+
+//===============T S U T A T S U======================//
+
+//HARD DELETE - File Record
+router.delete('/deleteFile/:hID/:rID', (req, res) => {
+    const hID = req.params.hID;
+    const rID = req.params.rID;
+    const params = {
+        TableName: GCPORTAL_TABLE,
+        Key: {
+            circular_number: hID,
+            document_type: rID
+        }
+    };
+    dynamoDb.delete(params, (error) => {
+        if (error) {
+            res.status(400).json({ error: 'Could not delete File' });
+        }
+        // res.json({ success: true });
+        res.send("Record Successfully Deleted");
+    });
+});
+// ================ Q U E S T I O N S =========================//
+
+//update question
+router.post('/updateQuestion', (req, res) => {
+    const params = {
+        TableName: GCPORTAL_TABLE,
+        Key:{
+            "circular_number" : req.body.circular_number,
+            "document_type" : req.body.document_type
+        },
+        UpdateExpression: 'set confirmations = :confirmations',
+        ExpressionAttributeValues: {
+            ':confirmations' : req.body.confirmations
+        },
+        ReturnValues: "ALL_NEW"
+    }
+    dynamoDb.update(params, (err,data)=> {
+        if(err){
+            console.error("Unable to Update. Error JSON:", JSON.stringify(err, null, 2));
+        }else{
+            console.log("Update succeed:", JSON.stringify(data, null, 2));
+            res.send("Question Successfully Updated")
+        }
+    })
+})
+
+//delete question
+router.post('/deleteQuestion', (req,res) => {
+   const params = {
+       TableName : GCPORTAL_TABLE,
+       Key: {
+          "circular_number" : req.body.circular_number,
+          "document_type" : req.body.document_type
+       },
+       UpdateExpression: 'set confirmations = :confirmations',
+       ExpressionAttributeValues: {
+            ':confirmations' : req.body.confirmations
+        },
+       ReturnValues: "ALL_NEW"                            
+   }
+   dynamoDb.update(params, (err, data) => {
+       if(err) {
+        console.error("Unable to update item. Error JSON:", JSON.stringify(err, null, 2));
+       } else {
+        console.log("UpdateItem succeeded:", JSON.stringify(data, null, 2));
+           res.send("Record Sucessfully Deleted")
+       } 
+   })
+})
+
+//add new question
+router.post('/saveNewQuestion', (req, res) => {
+    const confirmations = req.body.confirmations;
+    const params = {
+        TableName: GCPORTAL_TABLE,
+        Key:{
+            "circular_number": req.body.circular_number,
+            "document_type": req.body.document_type
+        },
+        UpdateExpression: 'set confirmations = :confirmations',
+        ExpressionAttributeValues: {
+            ':confirmations' : confirmations
+        },
+        ReturnValues: "UPDATED_NEW"
+    }
+    dynamoDb.update(params, (error) => {
+        if(error){
+            res.status(400).json({error: 'Could not Update Question Record '});
+        }
+        res.json("Question Added");
+    })
+})
+
+//get related questions
+router.get('/getRelatedQuestion/:circular_number/:document_type', (req, res) => {
+    const circularNumber = req.params.circular_number;
+    const documentType = req.params.document_type;
+    const params = {
+       TableName:GCPORTAL_TABLE,
+        Key: {
+            circular_number: circularNumber,
+            document_type: documentType
+        }
+    }; 
+    dynamoDb.get(params, (error, result) => {
+        if(error){
+            console.log(error.message)
+        }else{
+            res.send(result.Item)  
+        }
+        
+    })
+})
+
+//=================A N S W E R S=====================//
+//update answer 
+router.post('/updateAnswer', (req, res)=>{
+    const confirmations = req.body.confirmations
+    const params = {
+        TableName: GCPORTAL_TABLE,
+        Key: {
+            "circular_number" : req.body.circular_number,
+            "document_type" : req.body.document_type
+        },
+        UpdateExpression: 'set confirmations = :confirmations',
+        ExpressionAttributeValues: {
+            ':confirmations' : confirmations
+        },
+        ReturnValues: "UPDATED_NEW"
+    }
+    dynamoDb.update(params, (err, data) => {
+        if(err) {
+         console.error("Unable to update item. Error JSON:", JSON.stringify(err, null, 2));
+        } else {
+         console.log("UpdateItem succeeded:", JSON.stringify(data, null, 2));
+            res.send("Record Sucessfully Updated")
+        } 
+    })
+})
+
+//delete answer
+router.post('/deleteAnswer', (req, res) => {
+    const confirmations = req.body.confirmations
+    const params ={
+        TableName: GCPORTAL_TABLE,
+        Key:{
+            "circular_number": req.body.circular_number,
+            "document_type": req.body.document_type
+        },
+        UpdateExpression: 'set confirmations = :confirmations',
+        ExpressionAttributeValues: {
+            ':confirmations' : confirmations
+        },
+        ReturnValues: "UPDATED_NEW"
+    }
+    dynamoDb.update(params, (error)=>{
+        if(error)
+        {
+            res.status(404).json({error: "Could not Delete Answer"})
+        }else{
+            res.send("Answer Deleted")
+        }
+    })
+})
+//add answer
+router.post('/addAnswer', (req, res) => {
+    const confirmations = req.body.confirmations;
+    const params ={
+        TableName: GCPORTAL_TABLE,
+        Key:{
+            "circular_number": req.body.circular_number,
+            "document_type": req.body.document_type
+        },
+        UpdateExpression: 'set confirmations = :confirmations',
+        ExpressionAttributeValues: {
+            ':confirmations' : confirmations
+        },
+        ReturnValues:"UPDATED_NEW"
+    }
+    dynamoDb.update(params, (error) => {
+        if(error)
+        {
+            res.status(404).json({error: "Could Not ADD Answer"})
+        }else{
+            res.send("Answer Successfully Added")
+        }
+        
+    })
+})
+
+// ================================ T E S T =====================
+ router.get('/tsutatsu', (req, res) => {
+     const params = {
+         TableName: GCPORTAL_TABLE
+     };
+     dynamoDb.scan(params, (error, result) => {
+         if(error){
+             console.log(error.message)
+             res.status(404).json({error: 'Error retrieving Document'})
+         }
+         if(result){
+            res.json(result)
+         }else{
+             res.status(404).json({error: 'Error!! Di ko makita ung hinahanap mo :('})
+         }
+     })
+ })
+ 
+ router.get('/tsutatsu/:cn/:dt', (req, res) => {
+    const circularNumber = req.params.cn;
+    const documentType = req.params.dt;
+    const params = {
+    TableName:GCPORTAL_TABLE,
+    Key: {
+        circular_number: circularNumber,
+        document_type: documentType
+    }
+    };
+    dynamoDb.get(params, (error, result) => {
+        if(error) console.log(error.message)
+        res.send(result)
+    })
+ })
+
+ router.get('/tsutatsu/:cn', (req, res) => {
+     const circular_number = req.params.cn;
+     const params = {
+        TableName: GCPORTAL_TABLE,
+        KeyConditionExpression: 'circular_number = :hkey',
+        ExpressionAttributeValues: {
+            ':hkey' : circular_number
+        }
+     };
+     dynamoDb.query(params, (error, result) => {
+         if(error){
+             console.log(error.message)
+             res.status(404).json({error: 'Error retrieving Result'})
+         }
+         if(result){
+             res.json(result);
+         }else{
+             res.status(404).json({error: 'Error!! Not found'})
+         }
+     })
+ })
+// // Secondary Indexes
+router.get('/documentType/:docType', (req, res) => {
+    const document_type = req.params.docType;
+    const params = {
+        TableName: GCPORTAL_TABLE,
+        IndexName: 'document_type-index',
+        KeyConditionExpression: 'document_type = :hkey',
+        ExpressionAttributeValues: {
+            ':hkey': document_type
+        }
+    }
+    dynamoDb.query(params, (error, result) => {
+        if(error){
+            console.log(error.message)
+            res.status(400).json({ error: 'Error retrieving Docment Type'});
+        }
+        if(result){
+            res.json(result)
+        }else{
+            res.status(404).json({ error: 'error!! not found'})
+        }
+    })
+})
+
+//============== R I N G I ==================//
+//update ringi status
+router.post('/updateIsNewStatus', (req, res) => {
+    const toSend = req.body;
+    const params ={
+        TableName: GCPORTAL_TABLE,
+        Key:{
+            "circular_number": toSend.circular_number,
+            "document_type": toSend.document_type
+        },
+        UpdateExpression: 'set is_new = :is_new',
+        ExpressionAttributeValues: {
+            ':is_new' : toSend.is_new
+        },
+        ReturnValues:"UPDATED_NEW"
+    }
+    dynamoDb.update(params, (error) => {
+        if(error)
+        {
+            console.log(error)
+        }else{
+           console.log("Is New Field Updated") 
+        }
+        
+    })
+})
+
+//getting ringi record related to the user
+router.get('/getMyRingiRecords/:document_type/:employee_code', (req, res) => {
+    const document_type = req.params.document_type;
+    const employee_code = req.params.employee_code;
+    const params = {
+       TableName: GCPORTAL_TABLE,
+       IndexName: 'document_type-index',
+       KeyConditionExpression: 'document_type = :hkey',
+       ExpressionAttributeValues: {
+           ':hkey': document_type
+       }
+    }
+    dynamoDb.query(params, (error, result) => {
+        if(error){
+           console.log(error.message)
+           res.status(400).json({ error: 'Error retrieving Ringi Document'})
+        }
+        if(result){
+           let toSend = result.Items.filter(rec => {
+               return rec.created_by_employee_code === employee_code
+           })
+           res.send(toSend)
+        }else{
+            res.status(404).json({ error: 'error!! not found'})
+        }
+    })
+})
+
+// ================ A N S W E R  S H E E T ===================== //
+
+
+// ================ K A N R E N  F I L E S ===================== //
+//update kanren record
+router.put('/updateKanrenRecord', (req, res) => {
+    const params = {
+        TableName: GCPORTAL_TABLE,
+        Item: req.body
+    }
+    dynamoDb.put(params, (err) => {
+        if(err){
+            console.log(err.message)
+        }else{
+            res.send('Kanren Record Successfully Updated')
+        }
+    })
+})
+
+// ================ K A N R E N  T A S K  F I L E S ===================== //
+router.put('/updateKanrenTask', (req, res) => {
+    const toSend = req.body
+    const params = {
+        TableName: GCPORTAL_TABLE,
+        Item: toSend
+    }
+    dynamoDb.put(params, (err)=> {
+        if(err)
+        {
+            console.log(err.message)
+        }else{
+            res.send('Kanren Task Successfully Updated')
+        }
+    })
+})
+
+
+
+
+
+
+
+
+
+module.exports = router;

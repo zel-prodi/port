@@ -1,0 +1,302 @@
+step by step how to setup aws lambda, aws dynamodb, aws gateway api
+
+1. Create function ( AWS lambda ) 
+2. Create Role ( IAM - Identity Access Management)
+3. Setup DynamoDB ( create table)
+4. API gateway and connect it to aws lambda.
+
+5. create app.js 
+create routes.js
+create index.js
+Note: To create shortcut file then paste all codes from documentation
+On cmder, just type "touch app.js" 
+
+
+6. Download AWS-CLI MSI installer then install it
+
+7. Go to cmder then type aws --version
+8. Go to cmder then type aws configure
+9. Paste this on cmder
+
+aws_access_key_id = AKIAJOUFR3FRCY7XFPCQ  
+aws_secret_access_key = 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
+
+region = us-east-2
+output = json
+
+10. go to package.json then include this code
+
+      "deploy": "npm run clean && npm run build && aws lambda update-function-code --function-name employees --zip-file fileb://build.zip --publish",
+        "clean": "rm build.zip",
+        "build": "zip -r build.zip node_modules index.js app.js routes.js"
+
+note: change function name on deploy key depends on your created function
+- remove first npm run clean &&
+- on cmder set https_proxy=http://hrdproxy.hrd-s.com:81
+- type "yarn deploy"
+- then paste it again the "npm run clean &&"
+
+11. Go to aws lambda page then select the lambda function name 
+12. Locate Code Entry Type then upload .zip file( build.zip ) 
+13. Click Save
+14  on cmder set https_proxy=http://hrdproxy.hrd-s.com:81
+15. on cmder, type yarn deploy
+16. once done, 
+17. test the backend script  -->> aws example link with routes 
+	https://l9joby61g9.execute-api.us-east-2.amazonaws.com/prod/getUsers
+
+getUsers  = routes ( /getUsers)
+
+Getting all records on database
+
+=================================================================
+STEP BY STEP HOW TO SETUP DYNAMODB LOCAL
+
+1. install DynamoDB local on internet https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/DynamoDBLocal.DownloadingAndRunning.html
+2. Choose Asia PAcific(tokyo) Region
+3. Unzip the file.
+4. then Paste the folder (DynamoDB local)  on C: drive.
+5. Create app-local.js on api folder.
+Paste this code:
+const app = require('./app');
+const port = 3000;
+app.listen(port, () => {
+    console.log(`listening on http://localhost:${port}`);
+});
+
+--->  go to routes.js
+Change "region" to : 'eu-east-2'
+Change port number on "endpoint:" to 8000
+
+
+6. Go to directory (make sure java run time is installed) and open cmd  then type 
+
+java -Djava.library.path=./DynamoDBLocal_lib -jar DynamoDBLocal.jar -sharedDb
+
+7. Package.json 
+paste this code on "scripts"
+ "start":"node app-local"
+
+8.To test if the table is created type this code on cmdr.
+
+aws dynamodb list-tables --endpoint-url http://localhost:8000
+
+9. Create new file in your project with the name "table-name.json" then paste this sample code.
+    {
+        "TableName": "employees",
+        "KeySchema": [
+          {
+            "AttributeName": "id",
+            "KeyType": "HASH"
+          }
+        ],
+        "AttributeDefinitions": [
+          {
+            "AttributeName": "id",
+            "AttributeType": "S"
+          }
+        ],
+        "ProvisionedThroughput": {
+          "ReadCapacityUnits": 1,
+          "WriteCapacityUnits": 1
+        }
+    }
+
+10. Go to package.json then paste this code
+
+"create-database": "aws dynamodb create-table --cli-input-json file://employee-table-model.json --endpoint-url http://localhost:8000"
+
+note: change the table-name.json
+
+11. Run the script "npm run create-database" the table will be created.
+
+12 Type: "nodemon --exec npm run start" , to start 
+
+
+computed: {
+	lastIndex() {
+		this.myData.map(a => a.cnNumber).sort((a,b) => {b-a})[0]
+	}
+}
+
+=========================LOCAL DYNAMODB COMMANDS================================
+---->> RUN THE JAVA
+java -Djava.library.path=./DynamoDBLocal_lib -jar DynamoDBLocal.jar -sharedDb
+
+---->>SHOW LIST OF TABLES
+aws dynamodb list-tables --endpoint-url http://localhost:8000
+
+---->>DELETE TABLE
+aws dynamodb delete-table --table-name <table_name> --endpoint-url http://localhost:8000
+
+---->>CREATE DATABASE
+npm run create-database 
+
+-------->> APP CLIENT ID - Cognito
+3ouv61sa5j272s5g8227dkfnek
+
+------->> AWS GATEWAY LINK
+https://tcaj4ui044.execute-api.us-east-2.amazonaws.com/gcprod/
+
+-------->> CALL BACK URI
+http://localhost:8080/en/login
+
+-------->> DOMAIN PREFIX
+https://gcportal.auth.us-east-2.amazoncognito.com
+
+=========================================
+
+------->> USER POOL NAME
+GCPortalUserPool
+
+------->> APP CLIENT NAME
+GCPortalClient
+
+------->> APP CLIENT ID
+59revjkt96551orafve4af4h2
+
+===================================================
+List all record (scan method)
+// ****scan all items (optional put limit)****
+===============================================
+router.get('/plancheck', (req, res) => {
+    const params = {
+        TableName: PLANCHECK_TABLE
+    };
+    dynamoDb.scan(params, (error, result) => {
+        if (error) {
+            res.status(400).json({ error: 'Error fetching the employees' });
+        }
+        res.json(result);
+    });
+});
+
+===================================================
+Get specific item (get method)
+// ****get plan code with revision (single)****
+====================================================
+router.get('/plancheck/:code/:rev', (req, res) => {
+    const codeNumber = req.params.code;
+    const planNumber = req.params.rev;
+    const params = {
+        TableName : PLANCHECK_TABLE,
+        Key: {
+            codeNumber: codeNumber,
+            planNumber: planNumber
+        }
+      };
+      dynamoDb.get(params, (error, result) => {
+          if(error) console.log(error.message)
+          res.send(result)
+      })
+});
+==================================================
+Query multiple items (query method)
+// ****query plan code (multiple records)****
+====================================================
+router.get('/plancheck/:code', (req, res) => {
+    const codeNumber = req.params.code;
+    const params = {
+        TableName: PLANCHECK_TABLE,
+        KeyConditionExpression: 'codeNumber = :hkey',
+        ExpressionAttributeValues: {
+          ':hkey': codeNumber
+        }
+      };
+    dynamoDb.query(params, (error, result) => {
+        if (error) {
+            console.log(error.message)
+            res.status(400).json({ error: 'Error retrieving codeNumber' });
+        }
+        if (result) {
+            res.json(result);
+        } else {
+            res.status(404).json({ error: `codeNumber with id: ${codeNumber} not found` });
+        }
+    });
+});
+
+======================CREATING GLOBAL SECONDARY INDEXES========================
+addGlobalIndexMainDoorLocation.json
+===================================
+{
+    "AttributeDefinitions": [
+        {
+            "AttributeName": "mainDoorLocation",
+            "AttributeType": "S"
+        }
+    ],
+    "GlobalSecondaryIndexUpdates":[
+        {
+            "Create": {
+                "IndexName": "mainDoorLocation-index",
+                "KeySchema": [
+                    {
+                        "AttributeName": "mainDoorLocation",
+                        "KeyType": "HASH"
+                    }
+                ],
+                "Projection": {
+                    "ProjectionType": "ALL"
+                },
+                "ProvisionedThroughput": {
+                    "ReadCapacityUnits": 1,
+                    "WriteCapacityUnits": 1
+                }
+            }
+        }
+ 
+    ],
+    "TableName": "planCheck"
+}
+
+========================================
+add in package.json script
+========================================
+"update-database": "aws dynamodb update-table --cli-input-json file://addGlobalIndexMainDoorLocation.json --endpoint-url http://localhost:8000",
+
+==================================================
+Query Secondary Index (query method)
+Should provide index name field(additional)
+===================================================
+// ****get plan with maindoorlocation ****
+router.get('/maindoorlocation/:location', (req, res) => {
+    const location = req.params.location;
+    const params = {
+        TableName: PLANCHECK_TABLE,
+        IndexName: 'mainDoorLocation-index',
+        KeyConditionExpression: 'mainDoorLocation = :hkey',
+        ExpressionAttributeValues: {
+          ':hkey': location
+        }
+      };
+    dynamoDb.query(params, (error, result) => {
+        if (error) {
+            console.log(error.message)
+            res.status(400).json({ error: 'Error retrieving codeNumber' });
+        }
+        if (result) {
+            res.json(result);
+        } else {
+            res.status(404).json({ error: `codeNumber with id: ${codeNumber} not found` });
+        }
+    });
+})
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,29 @@
+{
+    "AttributeDefinitions" : [
+        {
+            "AttributeName": "company_group",
+            "AttributeType": "S"
+        }
+    ],
+    "GlobalSecondaryIndexUpdates": [
+        {
+            "Create": {
+                "IndexName": "company_group-index",
+                "KeySchema": [
+                    {
+                        "AttributeName": "company_group",
+                        "KeyType": "HASH"
+                    }
+                ],
+                "Projection": {
+                    "ProjectionType": "ALL"
+                },
+                "ProvisionedThroughput": {
+                    "ReadCapacityUnits": 5,
+                    "WriteCapacityUnits": 5
+                }
+            }
+        }
+    ],
+    "TableName": "gcportal_users_tbl"
+ }
